@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
-import { Sparkles, Copy, Check, Upload, X, ChevronDown, RefreshCw, Lightbulb } from 'lucide-react';
+import { Sparkles, Copy, Check, Upload, X, ChevronDown, RefreshCw, Lightbulb, FileText } from 'lucide-react';
 import { generatePost } from '../lib/generate';
+import { savePost } from '../lib/history';
+import { generatePostPDF } from '../lib/pdf';
 
 const CONTENT_TYPES = [
   { id: 'autoridade', label: 'Autoridade', color: 'text-purple-400', active: 'border-purple-500 bg-purple-500/10', desc: 'Posicione-se como referência no nicho' },
@@ -80,7 +82,9 @@ export default function Generator({ profile, themes, apiKey, prefilledIdea, onPr
     try {
       const imageBase64List = await Promise.all(images.map(img => fileToBase64(img.file)));
       const content = await generatePost({ apiKey, topic, platform, contentType, template, instructions, profile, themes, imageBase64List });
-      setResult({ content, platform, template, contentType });
+      const postData = { content, platform, template, contentType, topic };
+      setResult(postData);
+      savePost(postData);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -247,10 +251,17 @@ export default function Generator({ profile, themes, apiKey, prefilledIdea, onPr
               {result.content}
             </div>
 
-            <button onClick={copy}
-              className={`flex items-center justify-center gap-2 w-full py-3 rounded-xl text-sm font-bold transition-all ${copied ? 'bg-green-600 text-white' : 'bg-indigo-600 hover:bg-indigo-500 text-white'}`}>
-              {copied ? <><Check size={16} /> Copiado para a área de transferência!</> : <><Copy size={16} /> Copiar todo o conteúdo</>}
-            </button>
+            <div className="grid grid-cols-2 gap-3">
+              <button onClick={copy}
+                className={`flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${copied ? 'bg-green-600 text-white' : 'bg-indigo-600 hover:bg-indigo-500 text-white'}`}>
+                {copied ? <><Check size={15} /> Copiado!</> : <><Copy size={15} /> Copiar conteúdo</>}
+              </button>
+              <button
+                onClick={() => generatePostPDF({ content: result.content, platform: result.platform, template: result.template, contentType: result.contentType, topic, profile })}
+                className="flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold bg-violet-600 hover:bg-violet-500 text-white transition-all">
+                <FileText size={15} /> Baixar PDF
+              </button>
+            </div>
           </div>
         ) : (
           <div className="card h-80 flex flex-col items-center justify-center text-center gap-4">

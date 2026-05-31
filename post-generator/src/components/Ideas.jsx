@@ -18,6 +18,21 @@ const TEMPLATES = [
   { id: 'video_roteiro',   label: 'Roteiro',     icon: '🎥' },
 ];
 
+// Robust JSON extractor — handles markdown fences, leading text, trailing text
+function extractJSON(text) {
+  // Try direct parse first
+  try { return JSON.parse(text.trim()); } catch {}
+  // Strip markdown code fences
+  const stripped = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+  try { return JSON.parse(stripped); } catch {}
+  // Find first [ ... ] block
+  const match = text.match(/(\[[\s\S]*\])/);
+  if (match) {
+    try { return JSON.parse(match[1]); } catch {}
+  }
+  throw new Error('Não foi possível extrair JSON da resposta.');
+}
+
 async function callClaude(apiKey, systemPrompt, userPrompt) {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -92,11 +107,10 @@ FORMATO DE SAÍDA — retorne APENAS um JSON válido, sem markdown, sem explica�
         'Você é um especialista em criação de conteúdo para redes sociais. Retorne apenas JSON válido, sem markdown.',
         prompt
       );
-      const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      const parsed = JSON.parse(cleaned);
+      const parsed = extractJSON(text);
       setIdeas(parsed);
     } catch (err) {
-      setError(err.message.includes('JSON') ? 'Erro ao processar resposta. Tente novamente.' : err.message);
+      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -265,12 +279,11 @@ FORMATO DE SAÍDA — retorne APENAS um JSON válido:
         `Você é um curador de conteúdo especialista em IA, tecnologia e gestão empresarial. Conheça as últimas notícias até sua data de corte. Retorne apenas JSON válido, sem markdown ou explicações.`,
         prompt
       );
-      const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      const parsed = JSON.parse(cleaned);
+      const parsed = extractJSON(text);
       setNews(parsed);
       setLastUpdated(new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
     } catch (err) {
-      setError(err.message.includes('JSON') ? 'Erro ao processar resposta. Tente novamente.' : err.message);
+      setError(err.message);
     } finally {
       setLoading(false);
     }

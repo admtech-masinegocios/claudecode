@@ -2,13 +2,15 @@ import { useState, useEffect } from 'react';
 import Generator from './components/Generator';
 import Settings from './components/Settings';
 import Ideas from './components/Ideas';
-import { Settings as SettingsIcon, Zap, Lightbulb } from 'lucide-react';
+import History from './components/History';
+import { Settings as SettingsIcon, Zap, Lightbulb, History as HistoryIcon } from 'lucide-react';
 import './index.css';
 
 const TABS = [
-  { id: 'generator', label: 'Gerador',  icon: Zap },
-  { id: 'ideas',     label: 'Ideias',   icon: Lightbulb },
-  { id: 'settings',  label: 'Config',   icon: SettingsIcon },
+  { id: 'generator', label: 'Gerador',   icon: Zap },
+  { id: 'ideas',     label: 'Ideias',    icon: Lightbulb },
+  { id: 'history',   label: 'Histórico', icon: HistoryIcon },
+  { id: 'settings',  label: 'Config',    icon: SettingsIcon },
 ];
 
 export default function App() {
@@ -86,6 +88,9 @@ export default function App() {
         )}
         {activeTab === 'ideas' && (
           <Ideas profile={profile} themes={themes} apiKey={apiKey} onUseIdea={handleUseIdea} />
+        )}
+        {activeTab === 'history' && (
+          <History profile={profile} />
         )}
         {activeTab === 'settings' && (
           <Settings
