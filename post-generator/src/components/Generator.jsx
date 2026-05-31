@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Sparkles, Copy, Check, Upload, X, ChevronDown, RefreshCw, Lightbulb } from 'lucide-react';
 import { generatePost } from '../lib/generate';
 
@@ -40,7 +40,7 @@ function fileToBase64(file) {
   });
 }
 
-export default function Generator({ profile, themes, apiKey }) {
+export default function Generator({ profile, themes, apiKey, prefilledIdea, onPrefilledConsumed }) {
   const [platform, setPlatform] = useState('instagram');
   const [contentType, setContentType] = useState('autoridade');
   const [template, setTemplate] = useState('reels');
@@ -53,6 +53,17 @@ export default function Generator({ profile, themes, apiKey }) {
   const [copied, setCopied] = useState(false);
   const [showIdeas, setShowIdeas] = useState(false);
   const fileRef = useRef();
+
+  // Apply prefilled idea from Ideas tab
+  useEffect(() => {
+    if (prefilledIdea) {
+      if (prefilledIdea.topic) setTopic(prefilledIdea.topic);
+      if (prefilledIdea.template) setTemplate(prefilledIdea.template);
+      if (prefilledIdea.contentType) setContentType(prefilledIdea.contentType);
+      onPrefilledConsumed?.();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [prefilledIdea]);
 
   const handleImageUpload = (e) => {
     const files = Array.from(e.target.files);

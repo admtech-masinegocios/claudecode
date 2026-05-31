@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import Generator from './components/Generator';
 import Settings from './components/Settings';
-import { Settings as SettingsIcon, Zap, SlidersHorizontal } from 'lucide-react';
+import Ideas from './components/Ideas';
+import { Settings as SettingsIcon, Zap, Lightbulb } from 'lucide-react';
 import './index.css';
 
 const TABS = [
-  { id: 'generator', label: 'Gerador', icon: Zap },
-  { id: 'settings', label: 'Configurações', icon: SettingsIcon },
+  { id: 'generator', label: 'Gerador',  icon: Zap },
+  { id: 'ideas',     label: 'Ideias',   icon: Lightbulb },
+  { id: 'settings',  label: 'Config',   icon: SettingsIcon },
 ];
 
 export default function App() {
@@ -21,9 +23,17 @@ export default function App() {
   });
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('pg_apiKey') || '');
 
+  // Pre-filled idea coming from Ideas tab
+  const [prefilledIdea, setPrefilledIdea] = useState(null);
+
   useEffect(() => { localStorage.setItem('pg_profile', JSON.stringify(profile)); }, [profile]);
   useEffect(() => { localStorage.setItem('pg_themes', JSON.stringify(themes)); }, [themes]);
   useEffect(() => { localStorage.setItem('pg_apiKey', apiKey); }, [apiKey]);
+
+  const handleUseIdea = ({ topic, template, contentType }) => {
+    setPrefilledIdea({ topic, template, contentType });
+    setActiveTab('generator');
+  };
 
   return (
     <div className="min-h-screen bg-gray-950 flex flex-col">
@@ -49,20 +59,14 @@ export default function App() {
               👤 {profile.name}
             </span>
           )}
-          {/* Tab buttons */}
           <div className="flex bg-gray-800 rounded-lg p-1 gap-1">
             {TABS.map(tab => {
               const Icon = tab.icon;
               return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                <button key={tab.id} onClick={() => setActiveTab(tab.id)}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
-                    activeTab === tab.id
-                      ? 'bg-indigo-600 text-white'
-                      : 'text-gray-400 hover:text-gray-200'
-                  }`}
-                >
+                    activeTab === tab.id ? 'bg-indigo-600 text-white' : 'text-gray-400 hover:text-gray-200'
+                  }`}>
                   <Icon size={13} />
                   {tab.label}
                 </button>
@@ -75,7 +79,13 @@ export default function App() {
       {/* Main content */}
       <main className="flex-1">
         {activeTab === 'generator' && (
-          <Generator profile={profile} themes={themes} apiKey={apiKey} />
+          <Generator
+            profile={profile} themes={themes} apiKey={apiKey}
+            prefilledIdea={prefilledIdea} onPrefilledConsumed={() => setPrefilledIdea(null)}
+          />
+        )}
+        {activeTab === 'ideas' && (
+          <Ideas profile={profile} themes={themes} apiKey={apiKey} onUseIdea={handleUseIdea} />
         )}
         {activeTab === 'settings' && (
           <Settings
