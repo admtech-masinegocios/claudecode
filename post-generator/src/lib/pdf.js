@@ -137,121 +137,81 @@ Use 3 a 5 secoes. Retorne SOMENTE o JSON, sem nada antes ou depois.`;
 function buildPDF({ complementary, platform, template, contentType, profile }) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
-  const now = new Date();
-  const dateStr = now.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
-  const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
   const name   = s(profile?.name   || 'Andre Rufino');
   const handle = s(profile?.handle || '@ia.rufino');
 
   let page = 1;
 
-  // ── COVER PAGE ──────────────────────────────────────────────────────────────
-  fill(doc, C.black);
-  doc.rect(0, 0, W, H, 'F');
-
-  // Top accent bar (gray)
-  fill(doc, C.accent);
-  doc.rect(0, 0, W, 6, 'F');
+  // ── PAGE 1: Compact header + intro content ───────────────────────────────────
+  initPage(doc);
 
   // "Material exclusivo" label
-  doc.setFontSize(8);
+  doc.setFontSize(7.5);
   doc.setFont('helvetica', 'normal');
   ink(doc, C.dimGray);
-  doc.text('MATERIAL EXCLUSIVO', ML, 22);
+  doc.text('MATERIAL EXCLUSIVO', ML, 18);
 
   // Title
   const title = s(complementary.titulo || 'Guia Complementar');
-  doc.setFontSize(28);
+  doc.setFontSize(24);
   doc.setFont('helvetica', 'bold');
   ink(doc, C.white);
   const titleLines = doc.splitTextToSize(title, CONTENT_W);
-  doc.text(titleLines, ML, 35);
+  doc.text(titleLines, ML, 26);
 
   // Subtitle
-  const titleH = titleLines.length * 10;
-  const subtitleY = 35 + titleH + 4;
+  const titleH = titleLines.length * 9;
+  let headerY = 26 + titleH + 3;
   if (complementary.subtitulo) {
-    doc.setFontSize(12);
+    doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     ink(doc, C.midGray);
     const subLines = doc.splitTextToSize(s(complementary.subtitulo), CONTENT_W);
-    doc.text(subLines, ML, subtitleY);
+    doc.text(subLines, ML, headerY);
+    headerY += subLines.length * 5 + 2;
   }
 
-  // Divider line
-  const divY = subtitleY + 18;
-  draw(doc, C.divider);
-  doc.setLineWidth(0.4);
-  doc.line(ML, divY, W - MR, divY);
-
-  // Author block
-  doc.setFontSize(13);
-  doc.setFont('helvetica', 'bold');
-  ink(doc, C.white);
-  doc.text(name, ML, divY + 12);
-
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  ink(doc, C.midGray);
-  doc.text(handle, ML, divY + 19);
-
-  // Date/time
+  // Author + platform tags inline
   doc.setFontSize(9);
-  ink(doc, C.dimGray);
-  doc.text(`${dateStr}  |  ${timeStr}`, ML, divY + 26);
+  doc.setFont('helvetica', 'bold');
+  ink(doc, C.accent);
+  doc.text(`${name}  ·  ${handle}`, ML, headerY + 4);
 
-  // Bottom left: platform + type tags
-  const tagY = H - 24;
   const plat = platform === 'instagram' ? 'Instagram' : 'LinkedIn';
   const ctLabel = contentType ? contentType.charAt(0).toUpperCase() + contentType.slice(1) : '';
-
-  fill(doc, C.cardBg);
-  doc.roundedRect(ML, tagY, 26, 7, 1.5, 1.5, 'F');
-  doc.setFontSize(7.5);
-  doc.setFont('helvetica', 'bold');
-  ink(doc, C.lightGray);
-  doc.text(plat, ML + 13, tagY + 4.8, { align: 'center' });
-
-  if (ctLabel) {
-    fill(doc, C.cardBg);
-    doc.roundedRect(ML + 29, tagY, 26, 7, 1.5, 1.5, 'F');
-    ink(doc, C.lightGray);
-    doc.text(ctLabel, ML + 29 + 13, tagY + 4.8, { align: 'center' });
-  }
-
-  // Bottom right: page
-  doc.setFont('helvetica', 'normal');
+  const tagText = ctLabel ? `${plat}  ·  ${ctLabel}` : plat;
   doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
   ink(doc, C.dimGray);
-  doc.text('1', W - MR, H - 8, { align: 'right' });
+  doc.text(tagText, W - MR, headerY + 4, { align: 'right' });
 
-  // ── CONTENT PAGES ───────────────────────────────────────────────────────────
-  doc.addPage();
-  page = 2;
-  initPage(doc);
+  // Divider
+  headerY += 9;
+  draw(doc, C.divider);
+  doc.setLineWidth(0.3);
+  doc.line(ML, headerY, W - MR, headerY);
 
-  let y = 22;
+  let y = headerY + 8;
 
-  // Intro
+  // Intro directly on page 1
   if (complementary.intro) {
     y = renderSectionTitle(doc, 'Introducao', y);
-    y = renderBody(doc, complementary.intro, y, page, { name, handle, dateStr, profile });
+    y = renderBody(doc, complementary.intro, y, page, { name, handle });
     y += 4;
   }
 
   // Sections
   if (Array.isArray(complementary.secoes)) {
     for (const sec of complementary.secoes) {
-      // Check if we need a new page for the section title
       if (y > H - 40) {
-        drawFooter(doc, W, H, name, handle, dateStr, page);
+        drawFooter(doc, W, H, name, handle, page);
         doc.addPage();
         page++;
         initPage(doc);
         y = 22;
       }
       y = renderSectionTitle(doc, sec.titulo, y);
-      y = renderBody(doc, sec.conteudo, y, page, { name, handle, dateStr, profile });
+      y = renderBody(doc, sec.conteudo, y, page, { name, handle });
       y += 6;
     }
   }
@@ -259,21 +219,21 @@ function buildPDF({ complementary, platform, template, contentType, profile }) {
   // Conclusion
   if (complementary.conclusao) {
     if (y > H - 50) {
-      drawFooter(doc, W, H, name, handle, dateStr, page);
+      drawFooter(doc, W, H, name, handle, page);
       doc.addPage();
       page++;
       initPage(doc);
       y = 22;
     }
     y = renderSectionTitle(doc, 'Conclusao', y);
-    y = renderBody(doc, complementary.conclusao, y, page, { name, handle, dateStr, profile });
+    y = renderBody(doc, complementary.conclusao, y, page, { name, handle });
     y += 6;
   }
 
   // CTA block
   if (complementary.cta) {
     if (y > H - 45) {
-      drawFooter(doc, W, H, name, handle, dateStr, page);
+      drawFooter(doc, W, H, name, handle, page);
       doc.addPage();
       page++;
       initPage(doc);
@@ -282,10 +242,9 @@ function buildPDF({ complementary, platform, template, contentType, profile }) {
     y = renderCTA(doc, complementary.cta, handle, y);
   }
 
-  // Footer last content page
-  drawFooter(doc, W, H, name, handle, dateStr, page);
+  // Footer last page
+  drawFooter(doc, W, H, name, handle, page);
 
-  // Save
   const titleSlug = s(complementary.titulo || 'guia').toLowerCase().replace(/\s+/g, '-').slice(0, 30);
   doc.save(`${titleSlug}.pdf`);
 }
@@ -327,7 +286,7 @@ function renderBody(doc, text, startY, pageRef, meta) {
 
     for (let i = 0; i < lines.length; i++) {
       if (y + LINE_H > H - 18) {
-        drawFooter(doc, W, H, meta.name, meta.handle, meta.dateStr, pageRef);
+        drawFooter(doc, W, H, meta.name, meta.handle, pageRef);
         doc.addPage();
         pageRef++;
         initPage(doc);
@@ -346,7 +305,7 @@ function renderBody(doc, text, startY, pageRef, meta) {
       }
       y += LINE_H;
     }
-    y += 3; // paragraph gap
+    y += 3;
   }
 
   return y;
@@ -382,7 +341,7 @@ function renderCTA(doc, cta, handle, y) {
 }
 
 // ── Footer ────────────────────────────────────────────────────────────────────
-function drawFooter(doc, W, H, name, handle, dateStr, page) {
+function drawFooter(doc, W, H, name, handle, page) {
   fill(doc, C.sectionBg);
   doc.rect(0, H - 12, W, 12, 'F');
 
@@ -394,6 +353,5 @@ function drawFooter(doc, W, H, name, handle, dateStr, page) {
   doc.setFont('helvetica', 'normal');
   ink(doc, C.dimGray);
   doc.text(`${s(name)}  |  ${s(handle)}`, ML, H - 5);
-  doc.text(dateStr, W / 2, H - 5, { align: 'center' });
   doc.text(String(page), W - MR, H - 5, { align: 'right' });
 }

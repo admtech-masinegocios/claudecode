@@ -32,14 +32,17 @@ const IDEAS = {
 function parseSlides(content) {
   if (!content) return [content || ''];
 
-  // [SLIDE N] markers
-  if (/\[SLIDE\s*\d+\]/i.test(content)) {
-    return content.split(/\[SLIDE\s*\d+\]/i).map(s => s.trim()).filter(Boolean);
+  // [SLIDE N], [SLIDE N — Title], [SLIDE N: Title], [SLIDE N - Title]
+  if (/\[SLIDE\s*\d+[^\]]*\]/i.test(content)) {
+    return content
+      .split(/\[SLIDE\s*\d+[^\]]*\]/i)
+      .map(s => s.replace(/^[\s\-—*]+|[\s\-—*]+$/g, '').trim())
+      .filter(Boolean);
   }
 
-  // --- separators
-  if (/^-{3,}$/m.test(content)) {
-    const parts = content.split(/^-{3,}$/m).map(s => s.trim()).filter(Boolean);
+  // --- separators (3+ dashes on their own line)
+  if (/^-{3,}\s*$/m.test(content)) {
+    const parts = content.split(/^-{3,}\s*$/m).map(s => s.trim()).filter(Boolean);
     if (parts.length > 1) return parts;
   }
 
@@ -49,9 +52,9 @@ function parseSlides(content) {
     if (parts.length > 1) return parts;
   }
 
-  // Section headers like CHAMADA:, GANCHO:, etc. (all caps word + colon on its own line)
-  if (/^[A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇÜ ]{4,}:/m.test(content)) {
-    const parts = content.split(/(?=^[A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇÜ ]{4,}:)/m).map(s => s.trim()).filter(Boolean);
+  // Section headers: ALL CAPS word(s) + colon at start of line (e.g. GANCHO:, CONTEXTO:)
+  if (/^[A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇÜ][A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇÜ ]{3,}:/m.test(content)) {
+    const parts = content.split(/(?=^[A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇÜ][A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇÜ ]{3,}:)/m).map(s => s.trim()).filter(Boolean);
     if (parts.length > 1) return parts;
   }
 
