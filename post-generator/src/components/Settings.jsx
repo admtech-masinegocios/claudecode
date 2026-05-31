@@ -23,8 +23,15 @@ export default function Settings({ profile, setProfile, themes, setThemes, apiKe
   const [newTopic, setNewTopic] = useState('');
 
   const save = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    try {
+      localStorage.setItem('pg_profile', JSON.stringify(profile));
+      localStorage.setItem('pg_themes', JSON.stringify(themes));
+      localStorage.setItem('pg_apiKey', apiKey);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (e) {
+      alert('Erro ao salvar: ' + e.message);
+    }
   };
 
   const addTopic = (t) => {
@@ -42,9 +49,17 @@ export default function Settings({ profile, setProfile, themes, setThemes, apiKe
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-6 space-y-6">
-      <div>
-        <h2 className="text-lg font-bold text-white">Configurações</h2>
-        <p className="text-sm text-gray-400 mt-1">Configure seu perfil, temas e API key para personalizar os posts gerados.</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-white">Configurações</h2>
+          <p className="text-sm text-gray-400 mt-1">Configure seu perfil, temas e API key para personalizar os posts gerados.</p>
+        </div>
+        <button
+          onClick={save}
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${saved ? 'bg-green-600 text-white' : 'bg-indigo-600 hover:bg-indigo-500 text-white'}`}
+        >
+          {saved ? <><span>✓</span> Salvo!</> : <><Save size={15} /> Salvar</>}
+        </button>
       </div>
 
       {/* API Key */}

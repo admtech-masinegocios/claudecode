@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Sparkles, Copy, Check, Upload, X, ChevronDown, RefreshCw, Lightbulb, FileText } from 'lucide-react';
+import { Sparkles, Copy, Check, Upload, X, ChevronDown, RefreshCw, Lightbulb, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
 import { generatePost } from '../lib/generate';
 import { savePost } from '../lib/history';
 import { generatePostPDF } from '../lib/pdf';
@@ -29,6 +29,41 @@ const IDEAS = {
   conversao: ['Quebrando a objeção mais comum', 'Para quem É e para quem NÃO É', 'Fazer sozinho vs. ter um método', 'Resposta a pergunta do direct', 'Se você está com [dor específica], vem', 'Prova social + próximo passo'],
 };
 
+function parseSlides(content) {
+  if (!content) return [content || ''];
+
+  // [SLIDE N] markers
+  if (/\[SLIDE\s*\d+\]/i.test(content)) {
+    return content.split(/\[SLIDE\s*\d+\]/i).map(s => s.trim()).filter(Boolean);
+  }
+
+  // --- separators
+  if (/^-{3,}$/m.test(content)) {
+    const parts = content.split(/^-{3,}$/m).map(s => s.trim()).filter(Boolean);
+    if (parts.length > 1) return parts;
+  }
+
+  // [0-3s] timing markers (roteiro)
+  if (/\[\d+[-–]\d+s\]/i.test(content)) {
+    const parts = content.split(/(?=\[\d+[-–]\d+s\])/i).map(s => s.trim()).filter(Boolean);
+    if (parts.length > 1) return parts;
+  }
+
+  // Section headers like CHAMADA:, GANCHO:, etc. (all caps word + colon on its own line)
+  if (/^[A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇÜ ]{4,}:/m.test(content)) {
+    const parts = content.split(/(?=^[A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇÜ ]{4,}:)/m).map(s => s.trim()).filter(Boolean);
+    if (parts.length > 1) return parts;
+  }
+
+  // Numbered sections 1. ... 2. ... at start of line
+  if (/^\d+\.\s/m.test(content)) {
+    const parts = content.split(/(?=^\d+\.\s)/m).map(s => s.trim()).filter(Boolean);
+    if (parts.length > 1) return parts;
+  }
+
+  return [content.trim()];
+}
+
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -55,6 +90,7 @@ export default function Generator({ profile, themes, apiKey, prefilledIdea, onPr
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
   const [showIdeas, setShowIdeas] = useState(false);
+  const [slideIndex, setSlideIndex] = useState(0);
   const fileRef = useRef();
 
   // Apply prefilled idea from Ideas tab
@@ -85,6 +121,7 @@ export default function Generator({ profile, themes, apiKey, prefilledIdea, onPr
       const content = await generatePost({ apiKey, topic, platform, contentType, template, instructions, profile, themes, imageBase64List });
       const postData = { content, platform, template, contentType, topic };
       setResult(postData);
+      setSlideIndex(0);
       savePost(postData);
     } catch (err) {
       setError(err.message);
@@ -93,9 +130,11 @@ export default function Generator({ profile, themes, apiKey, prefilledIdea, onPr
     }
   };
 
-  const copy = () => {
-    if (!result?.content) return;
-    navigator.clipboard.writeText(result.content);
+  const slides = result ? parseSlides(result.content) : [];
+  const currentSlide = slides[slideIndex] || '';
+
+  const copy = (text) => {
+    navigator.clipboard.writeText(text ?? result?.content ?? '');
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
   };
@@ -226,6 +265,7 @@ export default function Generator({ profile, themes, apiKey, prefilledIdea, onPr
       <div className="lg:sticky lg:top-20 lg:self-start">
         {result ? (
           <div className="card flex flex-col gap-4">
+            {/* Header */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className="text-xl">{TEMPLATES.find(t => t.id === result.template)?.icon}</span>
@@ -236,26 +276,60 @@ export default function Generator({ profile, themes, apiKey, prefilledIdea, onPr
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button onClick={generate} className="btn-secondary text-xs py-1.5" title="Regerar">
-                  <RefreshCw size={13} /> Regerar
-                </button>
-                <button onClick={copy} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${copied ? 'bg-green-600 text-white' : 'bg-indigo-600 hover:bg-indigo-500 text-white'}`}>
-                  {copied ? <Check size={13} /> : <Copy size={13} />} {copied ? 'Copiado!' : 'Copiar'}
-                </button>
-              </div>
+              <button onClick={generate} className="btn-secondary text-xs py-1.5">
+                <RefreshCw size={13} /> Regerar
+              </button>
             </div>
 
             <div className="h-px bg-gray-800" />
 
-            <div className="bg-gray-950 rounded-xl p-5 overflow-auto max-h-[60vh] text-sm text-gray-200 copy-output leading-relaxed">
-              {result.content}
+            {/* Slide navigation */}
+            {slides.length > 1 && (
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={() => setSlideIndex(i => Math.max(0, i - 1))}
+                  disabled={slideIndex === 0}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-700 text-gray-400 hover:border-gray-600 hover:text-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+                  <ChevronLeft size={13} /> Anterior
+                </button>
+                <div className="flex items-center gap-1.5">
+                  {slides.map((_, i) => (
+                    <button key={i} onClick={() => setSlideIndex(i)}
+                      className={`w-2 h-2 rounded-full transition-all ${i === slideIndex ? 'bg-indigo-500 w-4' : 'bg-gray-700 hover:bg-gray-500'}`} />
+                  ))}
+                </div>
+                <button
+                  onClick={() => setSlideIndex(i => Math.min(slides.length - 1, i + 1))}
+                  disabled={slideIndex === slides.length - 1}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-700 text-gray-400 hover:border-gray-600 hover:text-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all">
+                  Próximo <ChevronRight size={13} />
+                </button>
+              </div>
+            )}
+
+            {/* Slide counter */}
+            {slides.length > 1 && (
+              <p className="text-xs text-gray-500 text-center -mt-2">
+                Slide {slideIndex + 1} de {slides.length}
+              </p>
+            )}
+
+            {/* Slide content */}
+            <div className="bg-gray-950 rounded-xl p-5 overflow-auto max-h-[50vh] text-sm text-gray-200 leading-relaxed">
+              <pre className="whitespace-pre-wrap font-sans">{currentSlide}</pre>
             </div>
 
+            {/* Copy current slide */}
+            <button onClick={() => copy(currentSlide)}
+              className={`flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${copied ? 'bg-green-600 text-white' : 'bg-indigo-600 hover:bg-indigo-500 text-white'}`}>
+              {copied ? <><Check size={15} /> Copiado!</> : <><Copy size={15} /> {slides.length > 1 ? `Copiar slide ${slideIndex + 1}` : 'Copiar conteúdo'}</>}
+            </button>
+
+            {/* Copy all + PDF */}
             <div className="grid grid-cols-2 gap-3">
-              <button onClick={copy}
-                className={`flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold transition-all ${copied ? 'bg-green-600 text-white' : 'bg-indigo-600 hover:bg-indigo-500 text-white'}`}>
-                {copied ? <><Check size={15} /> Copiado!</> : <><Copy size={15} /> Copiar conteúdo</>}
+              <button onClick={() => copy(result.content)}
+                className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold border border-gray-700 text-gray-400 hover:border-gray-600 hover:text-gray-200 transition-all">
+                <Copy size={13} /> Copiar tudo
               </button>
               <button
                 disabled={pdfLoading}
@@ -266,8 +340,8 @@ export default function Generator({ profile, themes, apiKey, prefilledIdea, onPr
                   } catch(e) { alert('Erro ao gerar PDF: ' + e.message); }
                   finally { setPdfLoading(false); }
                 }}
-                className="flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold bg-violet-600 hover:bg-violet-500 text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed">
-                {pdfLoading ? <><RefreshCw size={15} className="animate-spin" /> Gerando PDF...</> : <><FileText size={15} /> Baixar PDF</>}
+                className="flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-semibold bg-violet-600 hover:bg-violet-500 text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                {pdfLoading ? <><RefreshCw size={13} className="animate-spin" /> Gerando...</> : <><FileText size={13} /> Baixar PDF</>}
               </button>
             </div>
           </div>
