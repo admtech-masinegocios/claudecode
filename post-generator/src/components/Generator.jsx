@@ -50,6 +50,7 @@ export default function Generator({ profile, themes, apiKey, prefilledIdea, onPr
   const [instructions, setInstructions] = useState('');
   const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -257,9 +258,16 @@ export default function Generator({ profile, themes, apiKey, prefilledIdea, onPr
                 {copied ? <><Check size={15} /> Copiado!</> : <><Copy size={15} /> Copiar conteúdo</>}
               </button>
               <button
-                onClick={() => generatePostPDF({ content: result.content, platform: result.platform, template: result.template, contentType: result.contentType, topic, profile })}
-                className="flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold bg-violet-600 hover:bg-violet-500 text-white transition-all">
-                <FileText size={15} /> Baixar PDF
+                disabled={pdfLoading}
+                onClick={async () => {
+                  setPdfLoading(true);
+                  try {
+                    await generatePostPDF({ apiKey, postContent: result.content, platform: result.platform, template: result.template, contentType: result.contentType, topic, profile });
+                  } catch(e) { alert('Erro ao gerar PDF: ' + e.message); }
+                  finally { setPdfLoading(false); }
+                }}
+                className="flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold bg-violet-600 hover:bg-violet-500 text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                {pdfLoading ? <><RefreshCw size={15} className="animate-spin" /> Gerando PDF...</> : <><FileText size={15} /> Baixar PDF</>}
               </button>
             </div>
           </div>

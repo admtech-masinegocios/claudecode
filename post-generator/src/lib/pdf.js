@@ -1,256 +1,399 @@
 import { jsPDF } from 'jspdf';
 
-const COLORS = {
-  primary:    [79,  70,  229],   // indigo-600
-  secondary:  [99,  102, 241],   // indigo-500
-  dark:       [15,  23,  42],    // slate-900
-  darkMid:    [30,  41,  59],    // slate-800
-  accent:     [168, 85,  247],   // purple-500
-  text:       [241, 245, 249],   // slate-100
-  textMuted:  [148, 163, 184],   // slate-400
+// ── Sanitize text for jsPDF (fixes broken special chars) ─────────────────────
+function sanitize(text) {
+  if (!text) return '';
+  return text
+    .replace(/’/g, "'").replace(/‘/g, "'")
+    .replace(/“/g, '"').replace(/”/g, '"')
+    .replace(/–/g, '-').replace(/—/g, '--')
+    .replace(/•/g, '*').replace(/…/g, '...')
+    .replace(/ã/g, 'a').replace(/á/g, 'a').replace(/â/g, 'a')
+    .replace(/à/g, 'a').replace(/ä/g, 'a')
+    .replace(/é/g, 'e').replace(/ê/g, 'e').replace(/è/g, 'e')
+    .replace(/í/g, 'i').replace(/ì/g, 'i')
+    .replace(/ó/g, 'o').replace(/ô/g, 'o').replace(/õ/g, 'o')
+    .replace(/ú/g, 'u').replace(/ü/g, 'u')
+    .replace(/ç/g, 'c').replace(/ñ/g, 'n')
+    .replace(/Ã/g, 'A').replace(/Á/g, 'A').replace(/Â/g, 'A')
+    .replace(/É/g, 'E').replace(/Ê/g, 'E')
+    .replace(/Í/g, 'I').replace(/Ó/g, 'O').replace(/Ô/g, 'O')
+    .replace(/Õ/g, 'O').replace(/Ú/g, 'U').replace(/Ü/g, 'U')
+    .replace(/Ç/g, 'C')
+    .replace(/[^\x00-\x7F]/g, '')   // strip any remaining non-ASCII
+    .trim();
+}
+
+function s(text) { return sanitize(String(text || '')); }
+
+// ── Color palette ─────────────────────────────────────────────────────────────
+const C = {
+  black:      [0,   0,   0  ],
+  darkBg:     [10,  10,  10 ],
+  sectionBg:  [22,  22,  22 ],
+  cardBg:     [32,  32,  32 ],
+  divider:    [55,  55,  55 ],
   white:      [255, 255, 255],
-  instagram:  [236, 72,  153],   // pink-500
-  linkedin:   [37,  99,  235],   // blue-600
+  lightGray:  [220, 220, 220],
+  midGray:    [160, 160, 160],
+  dimGray:    [100, 100, 100],
+  accent:     [180, 180, 180],   // gray accent (no yellow)
 };
 
-const PLATFORM_LABELS = {
-  instagram: 'Instagram',
-  linkedin:  'LinkedIn',
-};
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function fill(doc, c)  { doc.setFillColor(c[0], c[1], c[2]); }
+function ink(doc, c)   { doc.setTextColor(c[0], c[1], c[2]); }
+function draw(doc, c)  { doc.setDrawColor(c[0], c[1], c[2]); }
 
-const TEMPLATE_LABELS = {
-  reels:            '🎬 Reels',
-  carrossel:        '📱 Carrossel',
-  twitter_capa:     '🖼️ Post com Capa',
-  twitter_sem_capa: '📝 Post Texto',
-  one_page:         '📊 One Page',
-  video_roteiro:    '🎥 Roteiro Vídeo',
-};
+const W = 210, H = 297, ML = 18, MR = 18, CONTENT_W = W - ML - MR;
+const LINE_H = 5.8;
 
-const PILLAR_LABELS = {
-  autoridade: 'Autoridade',
-  conexao:    'Conexão',
-  ensino:     'Ensino',
-  desejo:     'Desejo',
-  conversao:  'Conversão',
-};
+// ── PDF GENERATION ─────────────────────────────────────────────────────────────
+export async function generatePostPDF({ apiKey, postContent, platform, template, contentType, topic, profile }) {
+  // 1. Generate complementary content via Claude
+  const complementary = await generateComplementaryContent({ apiKey, postContent, platform, contentType, topic, profile });
 
-function rgb(arr) {
-  return { r: arr[0], g: arr[1], b: arr[2] };
+  // 2. Build PDF
+  buildPDF({ complementary, platform, template, contentType, profile });
 }
 
-function setFill(doc, color) {
-  doc.setFillColor(color[0], color[1], color[2]);
-}
+// ── Claude call ───────────────────────────────────────────────────────────────
+async function generateComplementaryContent({ apiKey, postContent, platform, contentType, topic, profile }) {
+  const profileCtx = profile?.name
+    ? `Criador: ${profile.name} | Nicho: ${profile.niche || ''} | Publico: ${profile.audience || ''}`
+    : '';
 
-function setTextColor(doc, color) {
-  doc.setTextColor(color[0], color[1], color[2]);
-}
+  const prompt = `Voce e um especialista em ${profile?.niche || 'gestao e inovacao'} criando um material complementar a um post de redes sociais.
 
-function setDrawColor(doc, color) {
-  doc.setDrawColor(color[0], color[1], color[2]);
-}
+POST ORIGINAL (${platform} - ${contentType}):
+---
+${postContent}
+---
 
-export function generatePostPDF({ content, platform, template, contentType, topic, profile, date }) {
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-  const W = 210;
-  const H = 297;
-  const margin = 18;
-  const contentW = W - margin * 2;
+${profileCtx}
 
-  // ── Background ──────────────────────────────────────────────────────────────
-  setFill(doc, COLORS.dark);
-  doc.rect(0, 0, W, H, 'F');
+Crie um material complementar e educativo em formato de mini-guia/ebook que APROFUNDA o tema do post acima. Este material sera enviado para os seguidores como um bonus exclusivo.
 
-  // ── Header gradient block ────────────────────────────────────────────────────
-  const headerH = 52;
-  setFill(doc, COLORS.primary);
-  doc.rect(0, 0, W, headerH, 'F');
+O material deve:
+- Complementar o post, indo mais fundo no assunto
+- Ter 800 a 1.200 palavras de conteudo real e util
+- Ser didatico, com exemplos praticos e frameworks
+- Usar linguagem direta, sem enrolacao
+- Incluir dados, numeros ou referencias quando possivel
 
-  // Header accent stripe
-  setFill(doc, COLORS.accent);
-  doc.rect(0, headerH - 3, W, 3, 'F');
-
-  // Logo / App name
-  setTextColor(doc, COLORS.white);
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'bold');
-  doc.text('PostGen AI', margin, 12);
-
-  // Date top-right
-  const dateStr = date
-    ? new Date(date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
-    : new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' });
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  setTextColor(doc, [199, 210, 254]); // indigo-200
-  doc.text(dateStr, W - margin, 12, { align: 'right' });
-
-  // Profile name (large)
-  if (profile?.name) {
-    setTextColor(doc, COLORS.white);
-    doc.setFontSize(18);
-    doc.setFont('helvetica', 'bold');
-    doc.text(profile.name, margin, 30);
-    if (profile.handle) {
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'normal');
-      setTextColor(doc, [199, 210, 254]);
-      doc.text(profile.handle, margin, 38);
+RETORNE APENAS UM JSON valido neste formato (sem markdown, sem codigo, so o JSON):
+{
+  "titulo": "titulo do guia (max 8 palavras, impactante)",
+  "subtitulo": "subtitulo complementar (max 15 palavras)",
+  "intro": "2-3 paragrafos de introducao que contextualizam o tema",
+  "secoes": [
+    {
+      "titulo": "titulo da secao",
+      "conteudo": "conteudo completo da secao (2-4 paragrafos com insights, exemplos, dados)"
     }
-  } else {
-    setTextColor(doc, COLORS.white);
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.text('Post Gerado', margin, 32);
+  ],
+  "conclusao": "paragrafo de conclusao com proximo passo ou reflexao final",
+  "cta": "chamada para acao curta (max 2 linhas)"
+}
+
+Use 3 a 5 secoes. Retorne SOMENTE o JSON, sem nada antes ou depois.`;
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: 'claude-opus-4-8',
+      max_tokens: 3000,
+      system: 'Voce cria materiais educativos complementares a posts de redes sociais. Retorne apenas JSON valido.',
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.error?.message || `Erro ${res.status}`);
   }
 
-  // ── Metadata badges ──────────────────────────────────────────────────────────
-  let badgeX = margin;
-  const badgeY = headerH + 10;
-  const badgeH = 7;
-  const badgePad = 3;
+  const data = await res.json();
+  const text = data.content[0].text;
 
-  function drawBadge(label, bgColor, textColor) {
-    doc.setFontSize(7.5);
-    doc.setFont('helvetica', 'bold');
-    const tw = doc.getTextWidth(label);
-    const bw = tw + badgePad * 2;
-    setFill(doc, bgColor);
-    doc.roundedRect(badgeX, badgeY - badgeH + 1, bw, badgeH, 1.5, 1.5, 'F');
-    setTextColor(doc, textColor);
-    doc.text(label, badgeX + badgePad, badgeY - 0.5);
-    badgeX += bw + 3;
+  // Extract JSON robustly
+  let parsed;
+  try { parsed = JSON.parse(text.trim()); }
+  catch {
+    const match = text.match(/\{[\s\S]*\}/);
+    if (match) parsed = JSON.parse(match[0]);
+    else throw new Error('Erro ao processar conteudo do PDF. Tente novamente.');
   }
+  return parsed;
+}
 
-  drawBadge(
-    PLATFORM_LABELS[platform] || platform,
-    platform === 'instagram' ? COLORS.instagram : COLORS.linkedin,
-    COLORS.white
-  );
-  drawBadge(
-    PILLAR_LABELS[contentType] || contentType,
-    COLORS.accent,
-    COLORS.white
-  );
-  drawBadge(
-    TEMPLATE_LABELS[template] || template,
-    COLORS.darkMid,
-    COLORS.text
-  );
+// ── PDF Builder ───────────────────────────────────────────────────────────────
+function buildPDF({ complementary, platform, template, contentType, profile }) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
-  // ── Topic ────────────────────────────────────────────────────────────────────
-  const topicY = badgeY + 10;
-  if (topic) {
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'bold');
-    setTextColor(doc, COLORS.textMuted);
-    doc.text('TÓPICO', margin, topicY);
+  const now = new Date();
+  const dateStr = now.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+  const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const name   = s(profile?.name   || 'Andre Rufino');
+  const handle = s(profile?.handle || '@ia.rufino');
 
-    doc.setFontSize(9.5);
-    doc.setFont('helvetica', 'normal');
-    setTextColor(doc, COLORS.text);
-    const topicLines = doc.splitTextToSize(topic.split('\n')[0], contentW);
-    doc.text(topicLines.slice(0, 2), margin, topicY + 5.5);
-  }
-
-  // ── Divider ──────────────────────────────────────────────────────────────────
-  const divY = topicY + 18;
-  setDrawColor(doc, COLORS.primary);
-  doc.setLineWidth(0.5);
-  doc.line(margin, divY, W - margin, divY);
-
-  // ── Content section ──────────────────────────────────────────────────────────
-  const contentStartY = divY + 8;
-  doc.setFontSize(8);
-  doc.setFont('helvetica', 'bold');
-  setTextColor(doc, COLORS.textMuted);
-  doc.text('CONTEÚDO DO POST', margin, contentStartY);
-
-  // Content body
-  const bodyY = contentStartY + 6;
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  setTextColor(doc, COLORS.text);
-
-  const lines = doc.splitTextToSize(content, contentW);
-  const lineH = 5.2;
-  const maxLines = Math.floor((H - bodyY - 30) / lineH);
-
-  let y = bodyY;
   let page = 1;
 
-  for (let i = 0; i < lines.length; i++) {
-    if (y + lineH > H - 20) {
-      // Footer on current page
-      drawFooter(doc, W, H, margin, page, profile);
-      doc.addPage();
-      page++;
+  // ── COVER PAGE ──────────────────────────────────────────────────────────────
+  fill(doc, C.black);
+  doc.rect(0, 0, W, H, 'F');
 
-      // Background for new page
-      setFill(doc, COLORS.dark);
-      doc.rect(0, 0, W, H, 'F');
+  // Top accent bar (gray)
+  fill(doc, C.accent);
+  doc.rect(0, 0, W, 6, 'F');
 
-      // Thin top stripe
-      setFill(doc, COLORS.primary);
-      doc.rect(0, 0, W, 4, 'F');
+  // "Material exclusivo" label
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'normal');
+  ink(doc, C.dimGray);
+  doc.text('MATERIAL EXCLUSIVO', ML, 22);
 
-      y = 16;
-      doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      setTextColor(doc, COLORS.text);
-    }
+  // Title
+  const title = s(complementary.titulo || 'Guia Complementar');
+  doc.setFontSize(28);
+  doc.setFont('helvetica', 'bold');
+  ink(doc, C.white);
+  const titleLines = doc.splitTextToSize(title, CONTENT_W);
+  doc.text(titleLines, ML, 35);
 
-    // Highlight slide markers like [SLIDE 1]
-    if (/^\[SLIDE\s*\d+\]|^\[CAPA\]|^---/.test(lines[i].trim())) {
-      setFill(doc, COLORS.primary);
-      doc.rect(margin - 2, y - 3.5, contentW + 4, lineH + 1, 'F');
-      setTextColor(doc, COLORS.white);
-      doc.setFont('helvetica', 'bold');
-      doc.text(lines[i], margin, y);
-      doc.setFont('helvetica', 'normal');
-      setTextColor(doc, COLORS.text);
-    } else if (/^(#{1,3}|\*\*|##)/.test(lines[i].trim()) || /^[A-Z\s]{8,}$/.test(lines[i].trim())) {
-      // Bold/heading lines
-      doc.setFont('helvetica', 'bold');
-      setTextColor(doc, [199, 210, 254]);
-      doc.text(lines[i], margin, y);
-      doc.setFont('helvetica', 'normal');
-      setTextColor(doc, COLORS.text);
-    } else if (/^[•\-\*]\s/.test(lines[i])) {
-      // Bullet points with accent dot
-      setFill(doc, COLORS.secondary);
-      doc.circle(margin + 1, y - 1, 0.8, 'F');
-      doc.text(lines[i].replace(/^[•\-\*]\s/, '  '), margin + 3, y);
-    } else {
-      doc.text(lines[i], margin, y);
-    }
-
-    y += lineH;
+  // Subtitle
+  const titleH = titleLines.length * 10;
+  const subtitleY = 35 + titleH + 4;
+  if (complementary.subtitulo) {
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    ink(doc, C.midGray);
+    const subLines = doc.splitTextToSize(s(complementary.subtitulo), CONTENT_W);
+    doc.text(subLines, ML, subtitleY);
   }
 
-  // ── Footer last page ─────────────────────────────────────────────────────────
-  drawFooter(doc, W, H, margin, page, profile);
+  // Divider line
+  const divY = subtitleY + 18;
+  draw(doc, C.divider);
+  doc.setLineWidth(0.4);
+  doc.line(ML, divY, W - MR, divY);
 
-  // ── Save ─────────────────────────────────────────────────────────────────────
-  const filename = `post-${platform}-${new Date().toISOString().slice(0, 10)}.pdf`;
-  doc.save(filename);
+  // Author block
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  ink(doc, C.white);
+  doc.text(name, ML, divY + 12);
+
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  ink(doc, C.midGray);
+  doc.text(handle, ML, divY + 19);
+
+  // Date/time
+  doc.setFontSize(9);
+  ink(doc, C.dimGray);
+  doc.text(`${dateStr}  |  ${timeStr}`, ML, divY + 26);
+
+  // Bottom left: platform + type tags
+  const tagY = H - 24;
+  const plat = platform === 'instagram' ? 'Instagram' : 'LinkedIn';
+  const ctLabel = contentType ? contentType.charAt(0).toUpperCase() + contentType.slice(1) : '';
+
+  fill(doc, C.cardBg);
+  doc.roundedRect(ML, tagY, 26, 7, 1.5, 1.5, 'F');
+  doc.setFontSize(7.5);
+  doc.setFont('helvetica', 'bold');
+  ink(doc, C.lightGray);
+  doc.text(plat, ML + 13, tagY + 4.8, { align: 'center' });
+
+  if (ctLabel) {
+    fill(doc, C.cardBg);
+    doc.roundedRect(ML + 29, tagY, 26, 7, 1.5, 1.5, 'F');
+    ink(doc, C.lightGray);
+    doc.text(ctLabel, ML + 29 + 13, tagY + 4.8, { align: 'center' });
+  }
+
+  // Bottom right: page
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  ink(doc, C.dimGray);
+  doc.text('1', W - MR, H - 8, { align: 'right' });
+
+  // ── CONTENT PAGES ───────────────────────────────────────────────────────────
+  doc.addPage();
+  page = 2;
+  initPage(doc);
+
+  let y = 22;
+
+  // Intro
+  if (complementary.intro) {
+    y = renderSectionTitle(doc, 'Introducao', y);
+    y = renderBody(doc, complementary.intro, y, page, { name, handle, dateStr, profile });
+    y += 4;
+  }
+
+  // Sections
+  if (Array.isArray(complementary.secoes)) {
+    for (const sec of complementary.secoes) {
+      // Check if we need a new page for the section title
+      if (y > H - 40) {
+        drawFooter(doc, W, H, name, handle, dateStr, page);
+        doc.addPage();
+        page++;
+        initPage(doc);
+        y = 22;
+      }
+      y = renderSectionTitle(doc, sec.titulo, y);
+      y = renderBody(doc, sec.conteudo, y, page, { name, handle, dateStr, profile });
+      y += 6;
+    }
+  }
+
+  // Conclusion
+  if (complementary.conclusao) {
+    if (y > H - 50) {
+      drawFooter(doc, W, H, name, handle, dateStr, page);
+      doc.addPage();
+      page++;
+      initPage(doc);
+      y = 22;
+    }
+    y = renderSectionTitle(doc, 'Conclusao', y);
+    y = renderBody(doc, complementary.conclusao, y, page, { name, handle, dateStr, profile });
+    y += 6;
+  }
+
+  // CTA block
+  if (complementary.cta) {
+    if (y > H - 45) {
+      drawFooter(doc, W, H, name, handle, dateStr, page);
+      doc.addPage();
+      page++;
+      initPage(doc);
+      y = 22;
+    }
+    y = renderCTA(doc, complementary.cta, handle, y);
+  }
+
+  // Footer last content page
+  drawFooter(doc, W, H, name, handle, dateStr, page);
+
+  // Save
+  const titleSlug = s(complementary.titulo || 'guia').toLowerCase().replace(/\s+/g, '-').slice(0, 30);
+  doc.save(`${titleSlug}.pdf`);
 }
 
-function drawFooter(doc, W, H, margin, page, profile) {
-  // Footer bar
-  doc.setFillColor(30, 41, 59);
-  doc.rect(0, H - 14, W, 14, 'F');
+// ── Page initializer (black bg + top bar) ─────────────────────────────────────
+function initPage(doc) {
+  fill(doc, C.black);
+  doc.rect(0, 0, W, H, 'F');
+  fill(doc, C.sectionBg);
+  doc.rect(0, 0, W, 10, 'F');
+}
 
-  doc.setFillColor(79, 70, 229);
-  doc.rect(0, H - 14, W, 1.5, 'F');
+// ── Section title ─────────────────────────────────────────────────────────────
+function renderSectionTitle(doc, title, y) {
+  // Gray left border accent
+  fill(doc, C.accent);
+  doc.rect(ML, y - 1, 2.5, 8, 'F');
+
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  ink(doc, C.white);
+  doc.text(s(title), ML + 6, y + 5.5);
+  return y + 14;
+}
+
+// ── Body text renderer with pagination ────────────────────────────────────────
+function renderBody(doc, text, startY, pageRef, meta) {
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  ink(doc, C.lightGray);
+
+  const paragraphs = s(text).split(/\n{2,}|\n(?=[A-Z*•-])/).filter(p => p.trim());
+  let y = startY;
+
+  for (const para of paragraphs) {
+    const isBullet = /^[*•\-]\s/.test(para.trim());
+    const cleanPara = para.replace(/^[*•\-]\s/, '').trim();
+    const lines = doc.splitTextToSize(cleanPara, isBullet ? CONTENT_W - 5 : CONTENT_W);
+
+    for (let i = 0; i < lines.length; i++) {
+      if (y + LINE_H > H - 18) {
+        drawFooter(doc, W, H, meta.name, meta.handle, meta.dateStr, pageRef);
+        doc.addPage();
+        pageRef++;
+        initPage(doc);
+        y = 22;
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        ink(doc, C.lightGray);
+      }
+
+      if (isBullet && i === 0) {
+        fill(doc, C.accent);
+        doc.circle(ML + 1.5, y - 1, 1, 'F');
+        doc.text(lines[i], ML + 5, y);
+      } else {
+        doc.text(lines[i], isBullet ? ML + 5 : ML, y);
+      }
+      y += LINE_H;
+    }
+    y += 3; // paragraph gap
+  }
+
+  return y;
+}
+
+// ── CTA block ─────────────────────────────────────────────────────────────────
+function renderCTA(doc, cta, handle, y) {
+  const boxH = 28;
+  fill(doc, C.sectionBg);
+  doc.roundedRect(ML, y, CONTENT_W, boxH, 3, 3, 'F');
+
+  draw(doc, C.accent);
+  doc.setLineWidth(0.4);
+  doc.roundedRect(ML, y, CONTENT_W, boxH, 3, 3, 'S');
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  ink(doc, C.accent);
+  doc.text('PROXIMO PASSO', ML + 6, y + 8);
+
+  doc.setFontSize(9.5);
+  doc.setFont('helvetica', 'normal');
+  ink(doc, C.lightGray);
+  const ctaLines = doc.splitTextToSize(s(cta), CONTENT_W - 12);
+  doc.text(ctaLines.slice(0, 2), ML + 6, y + 15);
+
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  ink(doc, C.midGray);
+  doc.text(s(handle), W - MR, y + 24, { align: 'right' });
+
+  return y + boxH + 8;
+}
+
+// ── Footer ────────────────────────────────────────────────────────────────────
+function drawFooter(doc, W, H, name, handle, dateStr, page) {
+  fill(doc, C.sectionBg);
+  doc.rect(0, H - 12, W, 12, 'F');
+
+  draw(doc, C.divider);
+  doc.setLineWidth(0.3);
+  doc.line(0, H - 12, W, H - 12);
 
   doc.setFontSize(7.5);
   doc.setFont('helvetica', 'normal');
-  doc.setTextColor(148, 163, 184);
-  const leftText = profile?.name
-    ? `${profile.name}${profile.handle ? ' · ' + profile.handle : ''}`
-    : 'PostGen AI';
-  doc.text(leftText, margin, H - 5.5);
-  doc.text(`Página ${page}`, W - margin, H - 5.5, { align: 'right' });
+  ink(doc, C.dimGray);
+  doc.text(`${s(name)}  |  ${s(handle)}`, ML, H - 5);
+  doc.text(dateStr, W / 2, H - 5, { align: 'center' });
+  doc.text(String(page), W - MR, H - 5, { align: 'right' });
 }

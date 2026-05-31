@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Copy, Check, Trash2, FileText, Search, X, ChevronRight, AlertTriangle } from 'lucide-react';
+import { Copy, Check, Trash2, FileText, Search, X, ChevronRight, RefreshCw } from 'lucide-react';
 import { getHistory, deletePost, clearHistory } from '../lib/history';
 import { generatePostPDF } from '../lib/pdf';
 
@@ -16,12 +16,13 @@ const PILLAR_COLORS = {
   conversao:  'text-red-400    bg-red-400/10    border-red-400/20',
 };
 
-export default function History({ profile }) {
+export default function History({ profile, apiKey }) {
   const [posts, setPosts] = useState(() => getHistory());
   const [search, setSearch] = useState('');
   const [expandedId, setExpandedId] = useState(null);
   const [copiedId, setCopiedId] = useState(null);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [pdfLoadingId, setPdfLoadingId] = useState(null);
 
   const filtered = posts.filter(p =>
     !search ||
@@ -48,16 +49,20 @@ export default function History({ profile }) {
     setExpandedId(null);
   };
 
-  const downloadPDF = (post) => {
-    generatePostPDF({
-      content:     post.content,
-      platform:    post.platform,
-      template:    post.template,
-      contentType: post.contentType,
-      topic:       post.topic,
-      profile,
-      date:        post.date,
-    });
+  const downloadPDF = async (post) => {
+    setPdfLoadingId(post.id);
+    try {
+      await generatePostPDF({
+        apiKey,
+        postContent: post.content,
+        platform:    post.platform,
+        template:    post.template,
+        contentType: post.contentType,
+        topic:       post.topic,
+        profile,
+      });
+    } catch(e) { alert('Erro ao gerar PDF: ' + e.message); }
+    finally { setPdfLoadingId(null); }
   };
 
   const formatDate = (iso) => {
@@ -175,9 +180,9 @@ export default function History({ profile }) {
                 {copiedId === post.id ? <><Check size={11} /> Copiado</> : <><Copy size={11} /> Copiar</>}
               </button>
 
-              <button onClick={() => downloadPDF(post)}
-                className="flex items-center gap-1.5 text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-2.5 py-1.5 rounded-lg transition-all">
-                <FileText size={11} /> Baixar PDF
+              <button onClick={() => downloadPDF(post)} disabled={pdfLoadingId === post.id}
+                className="flex items-center gap-1.5 text-xs bg-violet-600 hover:bg-violet-500 text-white px-2.5 py-1.5 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                {pdfLoadingId === post.id ? <><RefreshCw size={11} className="animate-spin" /> Gerando...</> : <><FileText size={11} /> Baixar PDF</>}
               </button>
 
               <button onClick={() => remove(post.id)}

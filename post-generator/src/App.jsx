@@ -90,7 +90,7 @@ export default function App() {
           <Ideas profile={profile} themes={themes} apiKey={apiKey} onUseIdea={handleUseIdea} />
         )}
         {activeTab === 'history' && (
-          <History profile={profile} />
+          <History profile={profile} apiKey={apiKey} />
         )}
         {activeTab === 'settings' && (
           <Settings
