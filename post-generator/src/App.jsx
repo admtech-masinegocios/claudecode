@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Generator from './components/Generator';
 import Settings from './components/Settings';
-import { Settings as SettingsIcon, Zap } from 'lucide-react';
+import { Settings as SettingsIcon, Zap, SlidersHorizontal } from 'lucide-react';
 import './index.css';
 
 const TABS = [
